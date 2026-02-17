@@ -1,1 +1,1 @@
-Making a geoportal/ current sate: :( Not working
+Making a geoportal/ current state: : HALFworking :(
