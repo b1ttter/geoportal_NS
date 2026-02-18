@@ -2,20 +2,17 @@
 <html lang="pl">
 <head>
   <meta charset="UTF-8" />
-  <title>Geoportal – miasta</title>
+  <title>Geoportal</title>
 
-  <!-- OpenLayers CSS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@latest/ol.css">
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-    }
     #map {
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
     }
   </style>
 </head>
@@ -23,38 +20,67 @@
 
 <div id="map"></div>
 
-<!-- OpenLayers JS -->
-<script src="https://cdn.jsdelivr.net/npm/ol@latest/dist/ol.js"></script>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-  // PODKŁAD OSM
-  const osmLayer = new ol.layer.Tile({
-    source: new ol.source.OSM()
-  });
+  const map = L.map('map').setView([52.23, 21.01], 7);
 
-  // WARSTWA WMS Z GEOSERVERA
-  const miastaLayer = new ol.layer.Tile({
-    source: new ol.source.TileWMS({
-      url: 'http://localhost:9000/geoserver/geo/wms',
-      params: {
-        'LAYERS': 'geo:miasta',
-        'TILED': true
-      },
-      serverType: 'geoserver'
-    })
-  });
+  // PODKŁAD
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19
+  }).addTo(map);
 
-  // MAPA
-  const map = new ol.Map({
-    target: 'map',
-    layers: [
-      osmLayer,
-      miastaLayer
-    ],
-    view: new ol.View({
-      center: ol.proj.fromLonLat([21.0122, 52.2297]), // Warszawa
-      zoom: 6
-    })
+  // WMS
+  const wmsLayer = L.tileLayer.wms('/geoserver/wms', {
+    layers: 'geo:miasta',
+    format: 'image/png',
+    transparent: true,
+    version: '1.1.1'
+  }).addTo(map);
+
+  // POPUP PO KLIKNIĘCIU
+  map.on('click', function (e) {
+    const point = map.latLngToContainerPoint(e.latlng, map.getZoom());
+    const size = map.getSize();
+
+    const params = {
+      request: 'GetFeatureInfo',
+      service: 'WMS',
+      srs: 'EPSG:4326',
+      styles: '',
+      transparent: true,
+      version: '1.1.1',
+      format: 'image/png',
+      bbox: map.getBounds().toBBoxString(),
+      height: size.y,
+      width: size.x,
+      layers: 'geo:miasta',
+      query_layers: 'geo:miasta',
+      info_format: 'application/json',
+      x: Math.floor(point.x),
+      y: Math.floor(point.y)
+    };
+
+    const url = '/geoserver/wms?' + new URLSearchParams(params).toString();
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.features || data.features.length === 0) {
+          return;
+        }
+
+        const props = data.features[0].properties;
+
+        const html = `
+          <b>Miasto:</b> ${props.nazwa}<br/>
+          <b>ID:</b> ${props.id}
+        `;
+
+        L.popup()
+          .setLatLng(e.latlng)
+          .setContent(html)
+          .openOn(map);
+      });
   });
 </script>
 
