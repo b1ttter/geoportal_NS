@@ -38,7 +38,7 @@
   }).addTo(map);
 
   // POPUP PO KLIKNIĘCIU
-  map.on('click', function (e) {
+  map.on('hover', function (e) {
     const point = map.latLngToContainerPoint(e.latlng, map.getZoom());
     const size = map.getSize();
 
@@ -82,6 +82,48 @@
           .openOn(map);
       });
   });
+  map.on("click", function (e) {
+  const bbox = map.getBounds().toBBoxString();
+  const size = map.getSize();
+
+  const params = {
+    request: "GetFeatureInfo",
+    service: "WMS",
+    srs: "EPSG:3857",
+    styles: "",
+    transparent: true,
+    version: "1.3.0",
+    format: "image/png",
+    bbox: bbox,
+    height: size.y,
+    width: size.x,
+    layers: "geo:miasta",
+    query_layers: "geo:miasta",
+    info_format: "application/json",
+    crs: "EPSG:3857",
+    i: Math.round(e.containerPoint.x),
+    j: Math.round(e.containerPoint.y)
+  };
+
+  const url =
+    "/geoserver/wms?" +
+    Object.keys(params)
+      .map(k => k + "=" + encodeURIComponent(params[k]))
+      .join("&");
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      if (!data.features.length) return;
+
+      const props = data.features[0].properties;
+
+      L.popup()
+        .setLatLng(e.latlng)
+        .setContent(`<b>${props.nazwa}</b>`)
+        .openOn(map);
+    });
+});
 </script>
 
 </body>
