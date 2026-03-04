@@ -1,0 +1,49 @@
+FROM ubuntu:jammy
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    wget \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+
+RUN wget -qO- https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    | gpg --dearmor > /usr/share/keyrings/postgres.gpg
+
+RUN echo "deb [signed-by=/usr/share/keyrings/postgres.gpg] \
+    http://apt.postgresql.org/pub/repos/apt \
+    jammy-pgdg main" \
+    > /etc/apt/sources.list.d/pgdg.list
+
+
+RUN apt-get update && apt-get install -y \
+    postgresql-15 \
+    postgresql-15-postgis-3 \
+    postgresql-15-pgrouting \
+    postgresql-contrib \
+    && rm -rf /var/lib/apt/lists/*
+
+
+ENV PGDATA=/var/lib/postgresql/new_data
+ENV POSTGRES_USER=postgres
+ENV POSTGRES_PASSWORD=postgres
+ENV POSTGRES_DB=postgres
+
+
+RUN mkdir -p $PGDATA && chown -R postgres:postgres /var/lib/postgresql
+
+USER postgres
+
+
+RUN /usr/lib/postgresql/15/bin/initdb -D $PGDATA
+
+
+RUN echo "listen_addresses='*'" >> $PGDATA/postgresql.conf
+
+EXPOSE 5432
+
+CMD ["/usr/lib/postgresql/15/bin/postgres", "-D", "/var/lib/postgresql/new_data"]
