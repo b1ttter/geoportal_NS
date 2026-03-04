@@ -1,0 +1,56 @@
+
+
+services:
+  postgis:
+    build:
+      context: ./postgre
+      dockerfile: Dockerfile2
+    image: "postgis:moje_nowe"
+    container_name: "moje_nowe"
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/new_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/new_data
+
+  geoserver:
+    build:
+      context: ./geoserver
+      dockerfile: Dockerfile
+    image: "geoportal_geoserver"
+    container_name: "geoportal_geoserver"
+    environment:
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: geoserver
+
+    volumes:
+      - geoserver_data_new:/opt/geoserver/data_dir
+    depends_on:
+      - postgis
+
+  backend:
+    build: ./backend
+    depends_on:
+      - postgis
+
+  frontend:
+    build: ./frontend
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+      - geoserver
+
+volumes:
+  postgis_data:
+  geoserver_data_new:
