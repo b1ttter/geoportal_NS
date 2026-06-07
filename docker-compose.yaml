@@ -7,8 +7,6 @@ services:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "5432:5432"
     volumes:
       - postgis_data:/var/lib/postgresql/data
 
@@ -24,8 +22,14 @@ services:
 
   backend:
     build: ./backend
+    environment:
+      DB_HOST: postgis
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
     depends_on:
-      - postgis
+    - postgis
 
   frontend:
     build: ./frontend

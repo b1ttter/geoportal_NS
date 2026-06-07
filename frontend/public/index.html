@@ -10,121 +10,191 @@
   />
 
   <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+    }
+
     #map {
       width: 100vw;
       height: 100vh;
     }
+
+    #panel {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: white;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+      width: 260px;
+    }
+
+    #panel input,
+    #panel button {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 6px;
+      padding: 7px;
+    }
+
+    #panel small {
+      display: block;
+      margin-top: 8px;
+      color: #555;
+    }
   </style>
 </head>
+
 <body>
+  <div id="panel">
+    <b>Dodaj użytkownika</b>
 
-<div id="map"></div>
+    <input id="userName" placeholder="Nazwa użytkownika" />
+    <input id="lat" type="number" step="any" placeholder="Lat" />
+    <input id="lon" type="number" step="any" placeholder="Lon" />
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-  const map = L.map('map').setView([52.23, 21.01], 7);
+    <button id="addUserBtn">Dodaj na mapę</button>
 
-  // PODKŁAD
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19
-  }).addTo(map);
+    <small>Kliknij na mapę, żeby automatycznie uzupełnić współrzędne.</small>
+  </div>
 
-  // WMS
-  const wmsLayer = L.tileLayer.wms('/geoserver/wms', {
-    layers: 'geo:miasta',
-    format: 'image/png',
-    transparent: true,
-    version: '1.3.1'
-  }).addTo(map);
+  <div id="map"></div>
 
-  // POPUP PO KLIKNIĘCIU
-  map.on('hover', function (e) {
-    const point = map.latLngToContainerPoint(e.latlng, map.getZoom());
-    const size = map.getSize();
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    const params = {
-      request: 'GetFeatureInfo',
-      service: 'WMS',
-      srs: 'EPSG:4326',
-      styles: '',
-      transparent: true,
-      version: '1.1.1',
-      format: 'image/png',
-      bbox: map.getBounds().toBBoxString(),
-      height: size.y,
-      width: size.x,
+  <script>
+    const map = L.map('map').setView([52.23, 21.01], 7);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(map);
+
+    const wmsLayer = L.tileLayer.wms('/geoserver/wms', {
       layers: 'geo:miasta',
-      query_layers: 'geo:miasta',
-      info_format: 'application/json',
-      x: Math.floor(point.x),
-      y: Math.floor(point.y)
-    };
+      format: 'image/png',
+      transparent: true,
+      version: '1.3.1'
+    }).addTo(map);
 
-    const url = '/geoserver/wms?' + new URLSearchParams(params).toString();
+    let usersLayer = L.geoJSON(null, {
+      pointToLayer: function (feature, latlng) {
+        return L.marker(latlng);
+      },
+      onEachFeature: function (feature, layer) {
+        const props = feature.properties;
 
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        if (!data.features || data.features.length === 0) {
-          return;
-        }
+        layer.bindPopup(`
+          <b>Użytkownik:</b> ${escapeHtml(props.name)}<br/>
+          <b>ID:</b> ${props.id}<br/>
+          <button onclick="deleteUser(${props.id})">Usuń</button>
+        `);
+      }
+    }).addTo(map);
 
-        const props = data.features[0].properties;
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
 
-        const html = `
-          <b>Miasto:</b> ${props.nazwa}<br/>
-          <b>ID:</b> ${props.id}
-        `;
+    async function loadUsers() {
+      const response = await fetch('/api/users');
+      const data = await response.json();
 
-        L.popup()
-          .setLatLng(e.latlng)
-          .setContent(html)
-          .openOn(map);
+      usersLayer.clearLayers();
+      usersLayer.addData(data);
+    }
+
+    async function addUser() {
+      const name = document.getElementById('userName').value.trim();
+      const lat = Number(document.getElementById('lat').value);
+      const lon = Number(document.getElementById('lon').value);
+
+      if (!name || Number.isNaN(lat) || Number.isNaN(lon)) {
+        alert('Podaj nazwę, lat i lon.');
+        return;
+      }
+
+      await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ name, lat, lon })
       });
-  });
-  map.on("click", function (e) {
-  const bbox = map.getBounds().toBBoxString();
-  const size = map.getSize();
 
-  const params = {
-    request: "GetFeatureInfo",
-    service: "WMS",
-    srs: "EPSG:3857",
-    styles: "",
-    transparent: true,
-    version: "1.3.0",
-    format: "image/png",
-    bbox: bbox,
-    height: size.y,
-    width: size.x,
-    layers: "geo:miasta",
-    query_layers: "geo:miasta",
-    info_format: "application/json",
-    crs: "EPSG:3857",
-    i: Math.round(e.containerPoint.x),
-    j: Math.round(e.containerPoint.y)
-  };
+      document.getElementById('userName').value = '';
 
-  const url =
-    "/geoserver/wms?" +
-    Object.keys(params)
-      .map(k => k + "=" + encodeURIComponent(params[k]))
-      .join("&");
+      await loadUsers();
+    }
 
-  fetch(url)
-    .then(res => res.json())
-    .then(data => {
-      if (!data.features.length) return;
+    async function deleteUser(id) {
+      await fetch(`/api/users/${id}`, {
+        method: 'DELETE'
+      });
 
-      const props = data.features[0].properties;
+      await loadUsers();
+    }
 
-      L.popup()
-        .setLatLng(e.latlng)
-        .setContent(`<b>${props.nazwa}</b>`)
-        .openOn(map);
+    window.deleteUser = deleteUser;
+
+    document.getElementById('addUserBtn').addEventListener('click', addUser);
+
+    map.on('click', function (e) {
+      document.getElementById('lat').value = e.latlng.lat.toFixed(6);
+      document.getElementById('lon').value = e.latlng.lng.toFixed(6);
+
+      const point = map.latLngToContainerPoint(e.latlng, map.getZoom());
+      const size = map.getSize();
+
+      const params = {
+        request: 'GetFeatureInfo',
+        service: 'WMS',
+        srs: 'EPSG:4326',
+        styles: '',
+        transparent: true,
+        version: '1.1.1',
+        format: 'image/png',
+        bbox: map.getBounds().toBBoxString(),
+        height: size.y,
+        width: size.x,
+        layers: 'geo:miasta',
+        query_layers: 'geo:miasta',
+        info_format: 'application/json',
+        x: Math.floor(point.x),
+        y: Math.floor(point.y)
+      };
+
+      const url = '/geoserver/wms?' + new URLSearchParams(params).toString();
+
+      fetch(url)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.features || data.features.length === 0) {
+            return;
+          }
+
+          const props = data.features[0].properties;
+
+          const html = `
+            <b>Miasto:</b> ${props.nazwa}<br/>
+            <b>ID:</b> ${props.id}
+          `;
+
+          L.popup()
+            .setLatLng(e.latlng)
+            .setContent(html)
+            .openOn(map);
+        });
     });
-});
-</script>
 
+    loadUsers();
+  </script>
 </body>
 </html>
