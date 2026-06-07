@@ -1,1 +1,1 @@
-Making a geoportal/ current state: : HALFworking :(
+Making a geoportal/ current state: : Working :)
